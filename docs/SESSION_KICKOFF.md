@@ -1,85 +1,99 @@
 # Session Kickoff
 
 This is the handoff file: **update it at the end of every session**, and paste the
-"Kickoff prompt" block into a fresh Claude Code session to resume cleanly. It's meant
-to get a new session up to speed in one shot — `PROGRESS.md` is the detailed checklist;
-this file is the "where we are and what's next" summary.
+"Kickoff prompt" block into a fresh Claude Code session to resume cleanly. It's the
+"where we are and what's next" summary — `PROGRESS.md` is the detailed checklist,
+`ROADMAP.md` is the full plan + pin map, `ARCHITECTURE.md` is the firmware↔server↔cloud
+contract.
 
 ---
 
 ## Kickoff prompt (paste this into a new session)
 
-> You are resuming the **WowBot** project — a desktop robot: an ESP32-S3 body (DotStar
-> LED-matrix face, 2-axis pan-tilt head, INMP441 mic + MAX98357A speaker, LCD 2004
-> status display) driven by a laptop running a local voice loop (VAD → Whisper → Ollama
-> → TTS → serial tokens + streamed audio).
+> You are resuming **WowBot** — a standalone, laptop-free desktop robot: an ESP32-S3
+> (N16R8) running **xiaozhi-esp32** that talks over 2.4 GHz Wi-Fi to a **self-hosted
+> xiaozhi-esp32-server**, which calls DashScope STT / Kimi·DeepSeek·Qwen LLM /
+> Volcengine·CosyVoice TTS. Hardware: INMP441 mic + MAX98357A speaker, a custom
+> DotStar 16×16 face, and a 2× SG90 pan-tilt head, powered by a USB power bank.
 >
 > Before doing anything, read these in order:
 > 1. `docs/PROGRESS.md` — what's done and checked off.
-> 2. `docs/ROADMAP.md` — the full plan, pin map, and power budget.
-> 3. `docs/ARCHITECTURE.md` — the serial token contract both sides implement.
+> 2. `docs/ROADMAP.md` — the full plan, pin map, and power.
+> 3. `docs/ARCHITECTURE.md` — the firmware ↔ server ↔ cloud contract.
 >
-> Then continue from the "Current state", "Key facts & gotchas", and "Next steps"
-> sections of `docs/SESSION_KICKOFF.md`. Do NOT re-scaffold or re-verify work already
-> marked done — pick up at the next unchecked item.
+> **Then enter plan mode. Do NOT start writing or editing code.** Read the "Current
+> state", "Key facts & gotchas", and "Next steps" sections below, verify them against
+> the repo, and *craft the next step as a plan* for approval — at the
+> architecture/decision level — before any implementation. The user steers; you plan,
+> then (only after approval) generate code.
 
 ---
 
 ## Current state
 
-- **Last updated:** 2026-09-18
-- **Phase 0** (laptop voice loop): DONE — verified end-to-end.
-- **Phase 1** (serial link): DONE on the Maker-ESP32 V1.8 (`PING`→`PONG`,
-  `EXP:HAPPY`→`ACK:EXP:HAPPY`); **needs re-flashing to the ESP32-S3** (native USB CDC).
-- **Hardware upgraded:** purchased ESP32-S3 (N16R8), INMP441 mic, MAX98357A amp + 3 W
-  speaker, 2-axis pan-tilt (2× SG90), Mean Well LRS-35-5 (5 V / 7 A), MP1584EN buck,
-  1000 µF caps. The Maker-ESP32 and KY-038 are retired; the JQ8400-FN is now optional.
-- **Last action:** re-analyzed the audio path; bought the final hardware; docs updated.
-- **Where we stopped:** firmware still targets the Maker-ESP32 (classic ESP32 pins) and
-  still holds the stale DFRobot `speech_controller.*` (JQ8400/SAY) — both need updating
-  for the S3 + streaming-audio architecture.
+- **Last updated:** 2026-09-23
+- **Pivot (planning done, implementation not started).** WowBot moved from a
+  laptop-driven design (VAD → Whisper → Ollama → TTS → serial tokens) to a **standalone
+  xiaozhi-esp32** robot. The laptop path (`brain/` + Arduino `firmware/`) is preserved as
+  an offline fallback, not deleted.
+- **Decisions locked:** self-host `xiaozhi-esp32-server`; **custom DotStar face** (APA102
+  16×16); **USB power bank** instead of the mains PSU; LCD 2004 dropped.
+- **Where we stopped:** the plan is captured (below + `ROADMAP.md`). Nothing on the new
+  path has been cloned, flashed, or wired yet.
 
 ## Environment & tooling
 
-- OS: Windows 11 Pro. Shell: Git Bash (POSIX syntax — use `/dev/null`, not `NUL`).
-- Python 3.13; deps in `requirements.txt` are already installed.
-- PlatformIO CLI: `pio` is on PATH. Firmware is the PlatformIO project in `firmware/`.
-- Board: **ESP32-S3 DevKit (N16R8)** — native USB. (Old Maker-ESP32 V1.8 was COM3 @ 115200.)
-- Not a git repo yet — recommend `git init` before further renames/deletions.
-- Repo root: `C:\Users\Ivan\Desktop\materials\projects\wowbot`
+- OS: Windows 11 Pro. Shell: Git Bash (POSIX) or PowerShell.
+- **ESP-IDF v5.x** toolchain for xiaozhi-esp32 (VS Code + ESP-IDF extension, or `idf.py`
+  CLI). PlatformIO is still present but only for the legacy `firmware/`.
+- Repos to clone: `78/xiaozhi-esp32` (firmware) and `78/xiaozhi-esp32-server` (server).
+- Board: **ESP32-S3 DevKit (N16R8)** — native USB; Wi-Fi **2.4 GHz only**.
+- Power: Xiaomi 20000 mAh 22.5 W bank (5 V) → Type-C→XH2.54 breakout → MP1584EN buck → 3.3 V rail.
+- Repo is a git repo (branch `master`) with uncommitted work — make an initial commit first.
 
 ## Key facts & gotchas
 
-- **Brain = ESP32-S3 (N16R8):** 16 MB flash + 8 MB PSRAM, **native USB** (GPIO19/20 —
-  reserved). >921600 baud carries bidirectional audio.
-- **Audio is full-duplex streaming:** INMP441 (I2S0) up → Whisper; laptop TTS → bytes →
-  MAX98357A (I2S1) down. Length-prefixed binary frames, distinct from the newline tokens.
-- **`pyttsx3` can't stream to the robot** — it drives the Windows sound device directly.
-  Swap to `edge-tts` (MP3) or `piper` (WAV) so the laptop can send audio bytes.
-- **JQ8400-FN is now optional** — the MAX98357A streams all audio, so the MP3 module is
-  redundant unless kept for zero-latency SFX. `speech_controller.*` still holds the
-  wrong DFRobot `SAY:` code and should be removed/replaced.
-- **Power:** feed the S3 either 5 V to VIN (onboard regulator) *or* 3.3 V to 3V3 from the
-  MP1584 — never both, and never with USB 5 V connected at the same time.
-- PlatformIO DotStar pin is `adafruit/Adafruit DotStar@^1.2.5` — **not** `^1.6.4`
-  (doesn't exist on the registry → `UnknownPackageError`).
-- The user's keyboard has a Cyrillic layout; typing commands in it garbles them
-  (`ping` → `зштп`).
-- Defaults: TTS = `pyttsx3` (→ swap), STT = `faster-whisper`, LLM = Ollama `format: json`.
-- Local config overrides: copy `config.yaml` → `config.local.yaml` (git-ignored).
+- **API keys live on the server, not the firmware.** The firmware only holds the server's
+  WebSocket URL (compile-time); DashScope/Kimi/DeepSeek/Volcengine keys go in the server's
+  `config.yaml` / `data/.config.yaml`.
+- **DotStar (APA102), character LCDs, and servos are not native to xiaozhi** — all three
+  are custom drivers. xiaozhi's display layer covers OLED (SSD1306) + graphical LCD
+  (ST7789/GC9A01) only.
+- **No-codec audio path** (`NoAudioCodecSimplex`) is purpose-built for INMP441 + MAX98357A:
+  mic `WS=4/SCK=5/SD=6`; amp `DIN=7/BCLK=15/LRC=16`.
+- **MAX98357A** `SD`→3.3 V, `GAIN`→GND; **INMP441** `L/R`→GND (left channel).
+- **APA102 at 5 V** has a ~3.5 V logic-high threshold → run the DotStar at 3.3 V (dimmer)
+  or level-shift, or 3.3 V data is marginal at 5 V.
+- **PSRAM must be enabled** in the xiaozhi board config (N16R8) or the audio/AI stack
+  won't fit.
+- PlatformIO's `esp32-s3-devkitc-1` board is the **N8 (8 MB, no PSRAM)** variant — xiaozhi
+  needs a true N16R8 config.
+- **Power bank = Xiaomi 20000 mAh 22.5 W** (≈12,000 mAh @ 5 V). Feed from its highest-amp
+  port and use the **double-press low-current/trickle mode** (if this model has it) to stop
+  it auto-shutting-off at idle.
+- **A bare 2-wire Type-C breakout won't output 5 V from a C-to-C cable** — USB-C sources
+  energize VBUS only after the sink pulls CC1/CC2 down with 5.1 kΩ. Confirm the breakout has
+  those resistors, or use the bank's USB-A port + A→C cable (always-on 5 V).
+- Kimi rides the OpenAI-compatible provider; SenseVoice/Paraformer rides the FunASR provider.
+- Legacy: the old `brain/` + `firmware/` still build (Arduino/PlatformIO) and can drive the
+  serial-token path offline.
 
 ## Open questions
 
-1. **ESP32-S3 pin map** — verify the proposed GPIO allocation against the actual board.
-2. **TTS engine** — `edge-tts` (network, high quality) vs `piper` (offline neural).
+1. **Server host** — VPS vs always-on local box (unblocks Phase 2).
+2. **Exact server config keys** for Kimi (LLM) and SenseVoice/Paraformer (STT).
+3. **Type-C breakout CC resistors** — confirm the 5.1 kΩ CC1/CC2 pull-downs are on the
+   breakout, or plan on the bank's USB-A port + A→C cable.
 
 ## Next steps
 
-1. Flash the ESP32-S3; confirm native USB CDC + `READY`/`PONG`.
-2. Verify the S3 pin map; wire the 2× SG90 pan-tilt (GPIO13/14) and confirm gestures.
-3. Wire the DotStar (SPI) and confirm `EXP:` faces.
-4. Wire INMP441 + MAX98357A; build the length-prefixed audio framing (laptop + firmware).
-5. LCD captions, then body/packaging + portfolio polish.
+1. **Phase 0** — initial git commit of the repo (preserve the laptop fallback).
+2. **Phase 2** — stand up the self-hosted server (host → clone → keys → WebSocket URL).
+3. **Phase 3** — firmware talking MVP (ESP-IDF → clone xiaozhi-esp32 → N16R8 config →
+   wire mic+amp → flash → verify wake-word→STT→LLM→TTS).
+4. **Phase 4** — custom DotStar face driver.
+5. **Phase 5** — servo pan-tilt driver.
+6. **Phase 6** — polish.
 
 ---
 

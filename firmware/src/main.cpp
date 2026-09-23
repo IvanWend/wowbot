@@ -3,21 +3,18 @@
 #include "tokens.h"
 #include "expressions.h"
 #include "servo_controller.h"
-#include "speech_controller.h"
 #include "led_matrix.h"
 
 ServoController servos;
-SpeechController speech;
 LedMatrix face;
 
-// Serial acknowledgment for recognized commands. This board has no general-purpose
-// onboard LED (power + TX/RX only), so before the matrix and servos are wired, ACK is
-// the visible confirmation that a token was parsed and dispatched.
+// Serial acknowledgment for recognized commands. The S3 DevKit has no general-purpose
+// onboard LED (power LED only), so before the matrix and servos are wired, ACK is the
+// visible confirmation that a token was parsed and dispatched.
 static void ack(const Command& c) {
   switch (c.type) {
     case Command::EXP:    Serial.print("ACK:EXP:");    Serial.println(c.value);  break;
     case Command::MOV:    Serial.print("ACK:MOV:");    Serial.println(c.value);  break;
-    case Command::SAY:    Serial.println("ACK:SAY");                            break;
     case Command::BRIGHT: Serial.print("ACK:BRIGHT:"); Serial.println(c.number); break;
     default: break;
   }
@@ -30,9 +27,6 @@ static void handle(const Command& c) {
       break;
     case Command::MOV:
       servos.trigger(ServoController::gestureFromToken(c.value));
-      break;
-    case Command::SAY:
-      speech.say(c.value.c_str());
       break;
     case Command::BRIGHT:
       face.setBrightness((uint8_t)constrain(c.number, 0, 255));
@@ -50,10 +44,9 @@ static void handle(const Command& c) {
 }
 
 void setup() {
-  Serial.begin(UART0_BAUD);
+  Serial.begin(SERIAL_BAUD);  // USB CDC (virtual baud)
 
   servos.begin();
-  speech.begin();
   face.begin();
 
   face.showExpression(Expression::NEUTRAL);  // neutral face (if the matrix is wired)
@@ -63,7 +56,6 @@ void setup() {
 
 void loop() {
   servos.update();   // advance any active gesture (non-blocking)
-  speech.update();   // watch for the speech module's playback-complete ACK
   face.update();     // reserved for future animation
 
   while (Serial.available()) {

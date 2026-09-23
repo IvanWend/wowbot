@@ -3,27 +3,34 @@
 
 namespace {
 
-constexpr int HEAD_NEUTRAL = 90;  // degrees
+constexpr int PAN_NEUTRAL = 90;   // degrees, centered
+constexpr int TILT_NEUTRAL = 90;  // degrees, level
 constexpr int ARM_NEUTRAL = 90;
 
-// Gesture keyframes: head-angle sequences, non-blocking. These are PLACEHOLDER
-// angles — retune once the servo is physically mounted and you know its range.
-// Durations are the ms to reach each keyframe.
+// Gesture keyframes: {pan, tilt, ms} targets, non-blocking. Angles are PLACEHOLDERs —
+// retune once the servos are physically mounted and you know their safe travel.
+// ms is the time to reach each keyframe.
+//
+// The 2-axis head covers nod/shake/look/tilt. "wave" needs an arm servo, so until
+// Phase 2.5 it degrades to a gentle pan sweep.
 const Keyframe WAVE[] = {
-    {30, 300}, {150, 300}, {30, 300}, {150, 300}, {HEAD_NEUTRAL, 300},
+    {40, TILT_NEUTRAL, 300}, {140, TILT_NEUTRAL, 300}, {40, TILT_NEUTRAL, 300},
+    {140, TILT_NEUTRAL, 300}, {PAN_NEUTRAL, TILT_NEUTRAL, 300},
 };
 const Keyframe NOD[] = {
-    {HEAD_NEUTRAL, 150}, {115, 250}, {HEAD_NEUTRAL, 250}, {115, 250}, {HEAD_NEUTRAL, 150},
+    {PAN_NEUTRAL, TILT_NEUTRAL, 150}, {PAN_NEUTRAL, 115, 250}, {PAN_NEUTRAL, TILT_NEUTRAL, 250},
+    {PAN_NEUTRAL, 115, 250}, {PAN_NEUTRAL, TILT_NEUTRAL, 150},
 };
 const Keyframe SHAKE[] = {
-    {60, 200}, {120, 200}, {60, 200}, {120, 200}, {HEAD_NEUTRAL, 200},
+    {60, TILT_NEUTRAL, 200}, {120, TILT_NEUTRAL, 200}, {60, TILT_NEUTRAL, 200},
+    {120, TILT_NEUTRAL, 200}, {PAN_NEUTRAL, TILT_NEUTRAL, 200},
 };
-const Keyframe LOOK_LEFT[]  = {{30, 450}};
-const Keyframe LOOK_RIGHT[] = {{150, 450}};
-const Keyframe TILT[]       = {{115, 450}};
+const Keyframe LOOK_LEFT[]  = {{40, TILT_NEUTRAL, 450}};
+const Keyframe LOOK_RIGHT[] = {{140, TILT_NEUTRAL, 450}};
+const Keyframe TILT[]       = {{PAN_NEUTRAL, 115, 450}};
 const Keyframe DANCE[] = {
-    {30, 200}, {150, 200}, {30, 200}, {150, 200}, {HEAD_NEUTRAL, 300},
-    {150, 200}, {30, 200}, {HEAD_NEUTRAL, 200},
+    {40, 110, 200}, {140, 70, 200}, {40, 110, 200}, {140, 70, 200}, {PAN_NEUTRAL, TILT_NEUTRAL, 300},
+    {140, 110, 200}, {40, 70, 200}, {PAN_NEUTRAL, TILT_NEUTRAL, 200},
 };
 
 }  // namespace
@@ -32,9 +39,13 @@ void ServoController::begin() {
   // 50 Hz is the standard servo PWM period. ESP32Servo auto-allocates an LEDC timer;
   // if you later drive many channels and hit timer conflicts, allocate explicitly
   // with ESP32PWM::allocateTimer(n) before the first attach().
-  _head.setPeriodHertz(50);
-  _head.attach(SERVO_HEAD_PIN, 500, 2400);  // 500-2400us covers SG90 + TD-811MG
-  _head.write(HEAD_NEUTRAL);
+  _pan.setPeriodHertz(50);
+  _pan.attach(SERVO_PAN_PIN, 500, 2400);  // 500-2400us covers SG90 + TD-811MG
+  _pan.write(PAN_NEUTRAL);
+
+  _tilt.setPeriodHertz(50);
+  _tilt.attach(SERVO_TILT_PIN, 500, 2400);
+  _tilt.write(TILT_NEUTRAL);
 
 #if ARM_ENABLED
   _arm.setPeriodHertz(50);
@@ -50,16 +61,19 @@ void ServoController::update() {
   const Keyframe& kf = _frames[_index];
   unsigned long elapsed = now - _frameStart;
 
-  int angle = kf.angle;
+  int pan = kf.pan;
+  int tilt = kf.tilt;
   if (elapsed < kf.ms) {
-    // Linear interpolation toward the keyframe.
-    angle = _startAngle +
-            (int)((long)(kf.angle - _startAngle) * (long)elapsed / (long)kf.ms);
+    // Linear interpolation toward the keyframe, on both axes.
+    pan  = _startPan  + (int)((long)(kf.pan  - _startPan)  * (long)elapsed / (long)kf.ms);
+    tilt = _startTilt + (int)((long)(kf.tilt - _startTilt) * (long)elapsed / (long)kf.ms);
   }
-  _head.write(angle);
+  _pan.write(pan);
+  _tilt.write(tilt);
 
   if (elapsed >= kf.ms) {
-    _startAngle = kf.angle;
+    _startPan  = kf.pan;
+    _startTilt = kf.tilt;
     if (++_index >= _count) {
       _frames = nullptr;  // gesture done; hold the final pose
       _index = 0;
@@ -86,7 +100,8 @@ void ServoController::trigger(Gesture g) {
 
 void ServoController::setNeutral() {
   _frames = nullptr;
-  _head.write(HEAD_NEUTRAL);
+  _pan.write(PAN_NEUTRAL);
+  _tilt.write(TILT_NEUTRAL);
 #if ARM_ENABLED
   _arm.write(ARM_NEUTRAL);
 #endif
@@ -111,5 +126,6 @@ void ServoController::_startGesture(const Keyframe* frames, uint8_t count) {
   _count = count;
   _index = 0;
   _frameStart = millis();
-  _startAngle = _head.read();
+  _startPan = _pan.read();
+  _startTilt = _tilt.read();
 }

@@ -1,34 +1,45 @@
 #pragma once
-// WowBot pin map — VERIFY AGAINST YOUR ACTUAL BOARD with a multimeter before wiring.
-// Assumes a standard 30-pin ESP32-WROOM-32 DevKit layout (Maker-ESP32 V1.8 clone).
-// See docs/ROADMAP.md for the full table and the pins to AVOID (0, 2, 12, 6-11, 34-39).
+// WowBot pin map — ESP32-S3 DevKitC (N16R8). VERIFY AGAINST YOUR ACTUAL BOARD's
+// silkscreen with a multimeter before wiring. See docs/ROADMAP.md for the full table.
+//
+// AVOID on the S3:
+//   GPIO19/20 — native USB D-/D+ (reserved; this IS the laptop link)
+//   GPIO0, GPIO3, GPIO45, GPIO46 — strapping pins (boot mode / JTAG / VDD_SPI)
 
-// UART0 = USB-serial to the laptop. Do NOT repurpose (TX0=GPIO1, RX0=GPIO3).
-#define UART0_BAUD 115200
+// Laptop link = native USB CDC (GPIO19/20). `Serial` maps to it under
+// ARDUINO_USB_MODE=1 (see platformio.ini). Baud is virtual on USB CDC.
+#define SERIAL_BAUD 115200
 
-// UART speech-synthesis module on UART2 (DFRobot Gravity Speech Synthesis V2.0, SKU
-// DFR0760). Set the module's physical switch to UART (not I2C).
-#define SPEECH_RX 16    // ESP32 GPIO16 -> module TX
-#define SPEECH_TX 17    // ESP32 GPIO17 -> module RX
-#define SPEECH_BAUD 115200
+// I2S0 — INMP441 mic (RX, Phase 6). 16 kHz / 16-bit mono up to the laptop.
+#define I2S_MIC_WS  4    // L/R word select
+#define I2S_MIC_SCK 5    // bit clock
+#define I2S_MIC_SD  6    // serial data in
 
-// DotStar 16x16 matrix over hardware SPI (VSPI).
-#define DOTSTAR_DATA 23         // MOSI -> DATA
-#define DOTSTAR_CLOCK 18        // SCK  -> CLOCK
+// I2S1 — MAX98357A class-D amp (TX, Phase 6). TTS audio down from the laptop.
+#define I2S_SPKR_BCLK 7  // bit clock
+#define I2S_SPKR_LRC  8  // L/R clock (word select)
+#define I2S_SPKR_DIN  9  // serial data out
+
+// DotStar 16x16 matrix (APA102). Bit-banged SPI on any GPIO (Adafruit_DotStar data/clk
+// constructor); pins chosen to stay off the strapping pins and I2S lanes.
+#define DOTSTAR_DATA 11        // -> matrix DATA
+#define DOTSTAR_CLOCK 12       // -> matrix CLOCK
 #define DOTSTAR_WIDTH 16
 #define DOTSTAR_HEIGHT 16
 #define DOTSTAR_PIXELS (DOTSTAR_WIDTH * DOTSTAR_HEIGHT)
-#define DOTSTAR_BRIGHTNESS 40   // 0-255; CAP to avoid the 15 A full-white ceiling
+#define DOTSTAR_BRIGHTNESS 40   // 0-255; cap to avoid the full-white current spike
 #define DOTSTAR_SERPENTINE 0    // set 1 if alternate rows of the panel run backwards
 
 // Servos (ESP32Servo / LEDC).
-#define SERVO_HEAD_PIN 13       // SG90 — head/gesture
-#define SERVO_ARM_PIN 27        // TD-811MG — heavy joint (own 5 V/3 A+ rail, common ground)
+#define SERVO_PAN_PIN 13        // SG90 — pan (yaw)
+#define SERVO_TILT_PIN 14       // SG90 — tilt (pitch)
+#define SERVO_ARM_PIN 21        // TD-811MG — heavy joint (own >=6 V rail, common ground)
 #define ARM_ENABLED 0           // set 1 in Phase 2.5 after the arm's power rail is verified
 
-// No general-purpose onboard LED on this board (power + TX/RX LEDs only, all
-// hardware-defined). Visual feedback comes from the DotStar matrix (Phase 3) and the
-// servos (Phase 2); serial ACK replies (see main.cpp) confirm token dispatch before
-// any actuator is wired.
-//
-// GPIO2 remains a boot-strapping pin — do NOT wire external peripherals to it.
+// LCD 2004 caption/status (Phase 4) over I2C.
+#define LCD_SDA 17
+#define LCD_SCL 18
+
+// No general-purpose onboard LED on the S3 DevKit (power LED only). Serial `ACK:`
+// replies (see main.cpp) are the feedback until the matrix (Phase 3) and servos
+// (Phase 2) are wired.

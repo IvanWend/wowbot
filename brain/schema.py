@@ -56,7 +56,7 @@ class RobotAction:
 
 SYSTEM_PROMPT = """\
 You are WowBot, a small, cheerful desktop robot companion with a screen face, \
-a servo arm, and a voice. Reply to the user in ONE short spoken line (1-2 \
+a pan-tilt head, and a voice. Reply to the user in ONE short spoken line (1-2 \
 sentences), warm and a little playful. No emoji. Do not narrate your own actions.
 
 Respond with a single JSON object and nothing else, in exactly this shape:
@@ -133,9 +133,9 @@ def parse_llm_json(text: str) -> RobotAction:
 def to_tokens(action: RobotAction) -> list[str]:
     """Encode a ``RobotAction`` into newline-delimited serial tokens.
 
-    ``speech`` is deliberately NOT encoded here — it goes out via ``SerialLink.say``,
-    which sends the ``SAY:`` token and waits for the firmware's ``DONE:SAY`` ack so the
-    laptop knows when the robot has finished talking.
+    ``speech`` is deliberately NOT encoded here — it is spoken by the laptop's TTS
+    (Phases 0–5) and, in Phase 6, streamed to the robot as audio bytes. Either way it
+    never becomes a control token.
     """
     tokens = [f"EXP:{action.expression.value.upper()}"]
     if action.movement is not Movement.NONE:

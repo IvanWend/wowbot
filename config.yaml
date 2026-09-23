@@ -36,8 +36,8 @@ tts:
   rate: 170                      # pyttsx3 words-per-minute-ish
 
 serial:
-  port: COM3                     # Windows: Device Manager or `python -m serial.tools.list_ports`
-  baud: 115200
+  port: COM3                     # the S3 enumerates a NEW COM port (native USB) — find it via `python -m serial.tools.list_ports`
+  baud: 115200                   # virtual on USB CDC; the firmware's native USB ignores it
   timeout: 0.1
 
 persona:

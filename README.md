@@ -1,28 +1,27 @@
 # WowBot
 
-A small desktop robot: an ESP32 "body" with a DotStar LED-matrix face, a servo
-arm, and a speech-synthesis module (robot voice), driven by a laptop running a local
-speech loop:
+A small desktop robot: an ESP32-S3 "body" with a DotStar LED-matrix face, a 2-axis
+pan-tilt head, a mic, and a speaker, driven by a laptop running a local voice loop:
 
 ```
-VAD (mic) → Whisper (STT) → Ollama (schema-constrained JSON) → TTS → serial tokens → ESP32
+VAD (mic) → Whisper (STT) → Ollama (schema-constrained JSON) → TTS → serial tokens + audio → ESP32-S3
 ```
 
-- **Phase 0** is laptop-only (no hardware) and is the first thing to build.
-- The ESP32 firmware and the serial link come online in **Phase 1** and later.
-
-Read `docs/ROADMAP.md` for the full plan, hardware reality-check, pin map, and
-power budget. `docs/ARCHITECTURE.md` is the single source of truth for the serial
-token contract both sides implement against. `docs/PROGRESS.md` tracks what's done.
+- **Phase 0** (laptop voice loop) and **Phase 1** (serial link) are done; the hardware
+  is an ESP32-S3 (N16R8) with native USB for bidirectional audio.
+- Read `docs/ROADMAP.md` for the full plan, hardware reality-check, pin map, and power
+  budget. `docs/ARCHITECTURE.md` is the single source of truth for the serial-token +
+  audio-framing contract. `docs/PROGRESS.md` tracks what's done; `docs/SESSION_KICKOFF.md`
+  is the resume/handoff file.
 
 ## Layout
 
 ```
 wowbot/
-├── brain/            # Phase 0+ laptop software (Python)
-├── firmware/         # ESP32 firmware (PlatformIO / Arduino, Phase 1+)
+├── brain/            # laptop software (Python): VAD → STT → LLM → TTS → serial
+├── firmware/         # ESP32-S3 firmware (PlatformIO / Arduino)
 ├── docs/             # ROADMAP + ARCHITECTURE + PROGRESS + session kickoff
-├── assets/mp3/       # (superseded — the speech module synthesizes audio, no clips)
+├── assets/mp3/       # (superseded — audio now streams, no clip playback)
 ├── tests/            # laptop-side unit tests (no hardware needed)
 ├── config.yaml       # laptop config
 └── requirements.txt
@@ -49,37 +48,34 @@ python -m brain --text "what's your favorite color?"
 python -m brain
 ```
 
-`faster-whisper` downloads its model (`small` by default) on first use. The TTS
-engine is `pyttsx3` (Windows SAPI5, offline, zero setup) by default; see
-`docs/ARCHITECTURE.md` for `edge-tts`/`piper` alternatives when you want a better voice.
+`faster-whisper` downloads its model (`small` by default) on first use. The TTS engine
+is `pyttsx3` (Windows SAPI5, offline) by default; Phase 6 swaps in `edge-tts`/`piper` so
+the laptop can stream audio bytes to the robot's speaker.
 
 ## Hardware (Phase 1+)
 
-See `docs/ROADMAP.md` for the full pin map and power warnings. The two things that
-matter most:
+See `docs/ROADMAP.md` for the full pin map and power warnings. The two things that matter
+most:
 
-- **Verify the Maker-ESP32 V1.8 pinout with a multimeter** before wiring anything —
-  it's an unbranded DevKit clone and the silkscreen may lie.
-- **Do not share one 5 V rail** across the DotStar matrix, the TD-811MG servo, and
-  the ESP32. The matrix (up to 15 A full white) and servo (3.4 A stall) each need
-  their own supply with a common ground.
+- **Verify the ESP32-S3 pin map with a multimeter** before wiring — GPIO19/20 (USB) and
+  the strapping pins (GPIO0/3/45/46) must stay clear.
+- **Do not share one 5 V rail** across the DotStar matrix, the servos, and the ESP32-S3.
+  The matrix (up to 15 A full white) and servos (stall transients) need their own supply
+  with a common ground; the MP1584EN buck isolates the 3.3 V logic rail.
 
 ## Configuration
 
 All laptop settings live in `config.yaml`. Key knobs:
 
-| Key | Phase 0 default | Meaning |
+| Key | Default | Meaning |
 |---|---|---|
-| `serial_enabled` | `false` | set `true` in Phase 1 to talk to the ESP32 |
+| `serial_enabled` | `false` | set `true` in Phase 1 to talk to the ESP32-S3 |
+| `serial.port` | `COM3` | the S3's native-USB COM port (find via `python -m serial.tools.list_ports`) |
 | `stt.model` | `small` | faster-whisper size (`tiny`/`base`/`small`/`medium`) |
 | `llm.model` | `llama3.2` | Ollama model to chat with |
-| `tts.engine` | `pyttsx3` | TTS backend |
-| `serial.port` | `COM3` | Windows serial port (Phase 1) |
+| `tts.engine` | `pyttsx3` | TTS backend (`edge-tts`/`piper` in Phase 6) |
 
-## Open questions (unblock later phases)
+## Open questions
 
-1. **Mic model** — a KY-038 analog sensor keeps voice on the laptop (current default);
-   an INMP441 I2S mic would move capture onto the robot. Send the part number to
-   settle Phase 0's final architecture.
-2. **Chinese speech** — the DFRobot speech module speaks Chinese too, but the firmware
-   is English-ASCII only. Add UTF-16LE if the loop ever emits non-ASCII.
+1. **ESP32-S3 pin map** — verify the proposed GPIO allocation against the actual board.
+2. **TTS engine** — `edge-tts` (network, high quality) vs `piper` (offline neural).
