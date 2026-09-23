@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Config/secrets (copy config.yaml to config.local.yaml and edit that instead)
+config.local.yaml
+
+# PlatformIO / Arduino
+.pio/
+firmware/.pio/
+firmware/build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

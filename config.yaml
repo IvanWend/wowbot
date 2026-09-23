@@ -1,0 +1,44 @@
+# WowBot — laptop configuration.
+# Copy to config.local.yaml and edit that to keep your local tweaks out of git.
+
+app:
+  name: wowbot
+  serial_enabled: false          # Phase 0 = false; set true in Phase 1 to talk to the ESP32
+  log_level: INFO
+
+audio:
+  sample_rate: 16000
+  channels: 1
+  chunk_ms: 30                   # frame length for VAD (webrtcvad wants 10/20/30 ms)
+  input_device: null             # null = system default mic; else a device name/index
+
+vad:
+  mode: 1                        # webrtcvad aggressiveness, 0 (lenient) .. 3 (strict)
+  silence_ms: 700                # trailing silence that ends an utterance
+
+stt:
+  engine: faster-whisper         # 'faster-whisper' (local) or 'openai' (cloud, TODO)
+  model: small                   # tiny / base / small / medium / large
+  language: null                 # null = auto-detect; else e.g. 'en'
+  device: cpu                    # cpu | cuda
+
+llm:
+  engine: ollama                 # 'ollama' (local)
+  host: http://localhost:11434
+  model: llama3.2                # whatever `ollama list` shows
+  temperature: 0.7
+  max_tokens: 128
+  history_turns: 6               # conversation turns to keep as context (0 = none)
+
+tts:
+  engine: pyttsx3                # 'pyttsx3' (offline) | 'edge-tts' | 'piper'
+  voice: null                    # null = default voice
+  rate: 170                      # pyttsx3 words-per-minute-ish
+
+serial:
+  port: COM3                     # Windows: Device Manager or `python -m serial.tools.list_ports`
+  baud: 115200
+  timeout: 0.1
+
+persona:
+  name: WowBot
