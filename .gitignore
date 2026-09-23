@@ -10,6 +10,11 @@ venv/
 # Config/secrets (copy config.yaml to config.local.yaml and edit that instead)
 config.local.yaml
 
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
 # PlatformIO / Arduino
 .pio/
 firmware/.pio/

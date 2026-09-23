@@ -1,81 +1,69 @@
 # WowBot
 
-A small desktop robot: an ESP32-S3 "body" with a DotStar LED-matrix face, a 2-axis
-pan-tilt head, a mic, and a speaker, driven by a laptop running a local voice loop:
+A standalone, laptop-free desktop robot: an **ESP32-S3 (N16R8)** body running
+**xiaozhi-esp32** over Wi-Fi, with a DotStar LED-matrix face and a 2-axis pan-tilt head.
 
 ```
-VAD (mic) → Whisper (STT) → Ollama (schema-constrained JSON) → TTS → serial tokens + audio → ESP32-S3
+ESP32-S3 (xiaozhi-esp32) ──WebSocket/Wi-Fi──▶ self-hosted xiaozhi-esp32-server ──HTTPS──▶
+  INMP441 mic (I2S in)                        SileroVAD · FunASR STT                  DashScope STT
+  MAX98357A amp (I2S out)                     Kimi/DeepSeek/Qwen LLM                  Kimi/DeepSeek/Qwen
+  DotStar face (custom APA102 driver)         Volcengine/CosyVoice TTS                Volcengine/CosyVoice TTS
+  SG90 pan-tilt (custom LEDC driver)
 ```
 
-- **Phase 0** (laptop voice loop) and **Phase 1** (serial link) are done; the hardware
-  is an ESP32-S3 (N16R8) with native USB for bidirectional audio.
-- Read `docs/ROADMAP.md` for the full plan, hardware reality-check, pin map, and power
-  budget. `docs/ARCHITECTURE.md` is the single source of truth for the serial-token +
-  audio-framing contract. `docs/PROGRESS.md` tracks what's done; `docs/SESSION_KICKOFF.md`
-  is the resume/handoff file.
+**API keys live on the server only** — the firmware holds just the server's WebSocket URL.
+
+- `docs/ROADMAP.md` — the full plan, component reality-check, pin map, and power budget.
+- `docs/ARCHITECTURE.md` — the firmware ↔ server ↔ cloud contract.
+- `docs/PROGRESS.md` — what's done and checked off.
+- `docs/SESSION_KICKOFF.md` — the resume/handoff file.
+
+## Status
+
+- **Pivot to standalone: decided.** The earlier laptop-driven design (a Python voice loop
+  `VAD → Whisper → Ollama → TTS` driving the ESP32 over a serial link) is **preserved as a
+  legacy offline fallback**, not the active path.
+- **Phase 0 (preserve, git): done** — initial commit.
+- **Planning: done.** Implementation (server → firmware-talking MVP → face → motion) not
+  started yet.
 
 ## Layout
 
 ```
 wowbot/
-├── brain/            # laptop software (Python): VAD → STT → LLM → TTS → serial
-├── firmware/         # ESP32-S3 firmware (PlatformIO / Arduino)
+├── brain/            # LEGACY laptop software (Python): VAD → STT → LLM → TTS → serial
+├── firmware/         # LEGACY ESP32 firmware (PlatformIO / Arduino serial-token sketch)
 ├── docs/             # ROADMAP + ARCHITECTURE + PROGRESS + session kickoff
-├── assets/mp3/       # (superseded — audio now streams, no clip playback)
-├── tests/            # laptop-side unit tests (no hardware needed)
-├── config.yaml       # laptop config
-└── requirements.txt
+├── assets/           # (legacy) mp3 clip folder, superseded
+├── tests/            # (legacy) laptop-side unit tests
+├── config.yaml       # (legacy) laptop config
+└── requirements.txt  # (legacy) laptop Python deps
 ```
 
-## Quickstart — Phase 0 (laptop only)
+The active firmware will live in its own `xiaozhi-esp32` (ESP-IDF) checkout; the server in
+its own `xiaozhi-esp32-server` checkout — neither is in this tree yet.
 
-Requires Python 3.10+.
+## Hardware
 
-```bash
-cd brain/..
-python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-pip install -r requirements.txt
-
-# Pull an Ollama model (adjust the name in config.yaml to match)
-ollama pull llama3.2
-
-# Sanity-check the pipeline without a mic:
-python -m brain --text "what's your favorite color?"
-
-# Or run the full mic loop:
-python -m brain
-```
-
-`faster-whisper` downloads its model (`small` by default) on first use. The TTS engine
-is `pyttsx3` (Windows SAPI5, offline) by default; Phase 6 swaps in `edge-tts`/`piper` so
-the laptop can stream audio bytes to the robot's speaker.
-
-## Hardware (Phase 1+)
-
-See `docs/ROADMAP.md` for the full pin map and power warnings. The two things that matter
-most:
-
-- **Verify the ESP32-S3 pin map with a multimeter** before wiring — GPIO19/20 (USB) and
-  the strapping pins (GPIO0/3/45/46) must stay clear.
-- **Do not share one 5 V rail** across the DotStar matrix, the servos, and the ESP32-S3.
-  The matrix (up to 15 A full white) and servos (stall transients) need their own supply
-  with a common ground; the MP1584EN buck isolates the 3.3 V logic rail.
-
-## Configuration
-
-All laptop settings live in `config.yaml`. Key knobs:
-
-| Key | Default | Meaning |
+| Function | Component | Notes |
 |---|---|---|
-| `serial_enabled` | `false` | set `true` in Phase 1 to talk to the ESP32-S3 |
-| `serial.port` | `COM3` | the S3's native-USB COM port (find via `python -m serial.tools.list_ports`) |
-| `stt.model` | `small` | faster-whisper size (`tiny`/`base`/`small`/`medium`) |
-| `llm.model` | `llama3.2` | Ollama model to chat with |
-| `tts.engine` | `pyttsx3` | TTS backend (`edge-tts`/`piper` in Phase 6) |
+| Brain | ESP32-S3 DevKit (N16R8) | 16 MB flash + 8 MB PSRAM, native USB, 2.4 GHz Wi-Fi |
+| Firmware | xiaozhi-esp32 (ESP-IDF) | no-codec audio path (`NoAudioCodecSimplex`) |
+| Server | xiaozhi-esp32-server (self-hosted) | holds API keys; VPS or always-on local box |
+| Mic | INMP441 I2S | 3.3 V, L/R→GND |
+| Speaker | MAX98357A amp + 3 W speaker | VIN 5 V, SD→3.3 V, GAIN→GND |
+| Face | DotStar 16×16 (APA102) | **custom driver**; 3.3 V or level-shift |
+| Head | 2× SG90 pan-tilt | **custom LEDC driver** |
+| Power | Xiaomi 20000 mAh 22.5 W bank + MP1584EN buck | watch auto-shutoff + CC resistors |
+
+See `docs/ROADMAP.md` for the pin map and the power warnings that matter most: the
+ESP32-S3 board config must be the **N16R8 variant with PSRAM on** (PlatformIO's
+`esp32-s3-devkitc-1` is the wrong N8 board), and the APA102 logic-high threshold means the
+face runs at 3.3 V or through level shifters.
 
 ## Open questions
 
-1. **ESP32-S3 pin map** — verify the proposed GPIO allocation against the actual board.
-2. **TTS engine** — `edge-tts` (network, high quality) vs `piper` (offline neural).
+1. Server host — VPS vs always-on local box.
+2. Exact `xiaozhi-esp32-server` config keys for Kimi (OpenAI-compatible) and
+   SenseVoice/Paraformer (FunASR).
+3. Type-C→XH2.54 breakout — confirm the 5.1 kΩ CC1/CC2 pull-downs (else use USB-A).

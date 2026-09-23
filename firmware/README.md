@@ -1,4 +1,9 @@
-# WowBot Firmware (ESP32-S3)
+# WowBot Firmware (ESP32-S3) — LEGACY
+
+> ⚠️ **This is the legacy firmware** from the retired laptop-driven design (serial-token
+> sketch: `PING`/`ACK:`/`EXP:`/`MOV:`). It is **preserved as an offline fallback, not the
+> active path.** The active firmware is `xiaozhi-esp32` (ESP-IDF), documented in
+> `../docs/ROADMAP.md` and `../docs/ARCHITECTURE.md`.
 
 PlatformIO project for the ESP32-S3 side. Target board is the **ESP32-S3 DevKitC-1
 (N16R8)** — 16 MB flash + 8 MB OPI PSRAM, **native USB** (GPIO19/20 = the laptop link).

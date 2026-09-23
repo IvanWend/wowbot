@@ -10,9 +10,9 @@ lives in `ARCHITECTURE.md`.
 | Phase | Status | Result |
 |---|---|---|
 | — laptop brain (legacy) | ✅ Preserved | voice loop + serial link verified; kept as offline fallback |
-| 0 — preserve (git) | ⬜ Next | initial commit pending |
+| 0 — preserve (git) | ✅ Done | initial commit `052ef62` |
 | 1 — power (bank) | ⬜ Pending | |
-| 2 — self-hosted server | ⬜ Next | |
+| 2 — self-hosted server | ✅ Done | running locally; DeepSeek verified live |
 | 3 — firmware talking MVP | ⬜ Core | the go/no-go gate |
 | 4 — DotStar face | ⬜ Custom | |
 | 5 — servo pan-tilt | ⬜ Custom | |
@@ -26,13 +26,14 @@ lives in `ARCHITECTURE.md`.
 - [ ] (optional) keep as an offline fallback if ever needed
 
 ### Phase 0 — preserve
-- [ ] Initial git commit of the repo
+- [x] Initial git commit of the repo (`052ef62`)
 
 ### Phase 2 — self-hosted server
-- [ ] Choose host (VPS vs local box)
-- [ ] Clone `xiaozhi-esp32-server`, install deps, run
-- [ ] Configure `data/.config.yaml`: SileroVAD, FunASR (SenseVoice), LLM (Kimi/DeepSeek/Qwen), TTS (Volcengine/CosyVoice) + keys
-- [ ] Note WebSocket URL + device auth
+- [x] Choose host (local laptop for now; VPS later)
+- [x] Clone `xinnan-tech/xiaozhi-esp32-server`; install deps (Python 3.10 venv via uv + native ffmpeg/opus); run
+- [x] Configure `data/.config.yaml`: SileroVAD, FunASR (SenseVoice), LLM (DeepSeek), TTS (EdgeTTS for now) + keys
+- [x] Note WebSocket URL `ws://192.168.10.36:8000/xiaozhi/v1/`; device auth (disabled for dev)
+- [ ] (later) swap TTS EdgeTTS → CosyVoice/Volcengine; migrate server to VPS
 
 ### Phase 3 — firmware talking MVP
 - [ ] Install ESP-IDF v5.x toolchain
@@ -58,4 +59,4 @@ lives in `ARCHITECTURE.md`.
 1. Server host (VPS vs local box). 2. Exact Kimi/SenseVoice config keys. 3. Type-C breakout CC resistors.
 
 ## Next steps (in order)
-0 (commit) → 2 (server) → 3 (talking MVP) → 4 (face) → 5 (motion) → 6 (polish).
+3 (talking MVP) → 4 (face) → 5 (motion) → 6 (polish).
