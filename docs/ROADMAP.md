@@ -62,11 +62,53 @@ has the 5.1 kΩ CC1/CC2 pull-downs — otherwise use the bank's USB-A port + A�
   (Volcengine/CosyVoice) + keys; note the WebSocket URL and MAC-based device auth.
 - **Phase 3 — firmware talking MVP.** ESP-IDF → clone `xiaozhi-esp32` → N16R8 board config
   (PSRAM on) → no-codec audio → wire mic+amp → flash → verify wake-word→STT→LLM→TTS.
-- **Phase 4 — DotStar face.** Custom APA102 driver; states idle/blink/listening/thinking/
-  speaking; port art from the legacy `firmware/src/led_matrix.cpp`.
+- **Phase 4 — DotStar face.** Custom APA102 driver (full animated face); see
+  "Custom driver design" below.
 - **Phase 5 — servo pan-tilt.** LEDC driver; port keyframes from the legacy
   `firmware/src/servo_controller.cpp`; map device state → motion.
 - **Phase 6 — polish.** Body, README, demo, latency benchmark.
+
+## Custom driver design (Phase 4–5)
+
+Both drivers live in `main/boards/wowbot-n16r8/` — the firmware globs
+`boards/${BOARD_DIR}/*.cc` (`main/CMakeLists.txt` line ~906), so **new `.cc` files in the
+board dir compile with no CMake edit**.
+
+### Face — DotStar (APA102), full animated
+
+- **Hook:** `DotStarFaceDisplay : public Display` (`main/display/display.h`), returned by
+  the board's `GetDisplay()`. The app already calls `SetEmotion()`, `SetStatus()`,
+  `SetChatMessage()` on every state/emotion/text change — no other wiring needed.
+- **Transport:** APA102 is *not* in the `led_strip` driver's `led_model_t`
+  (`WS2812/SK6812/WS2811/WS2816` only), so drive it with the **SPI master** driver on
+  `SPI2_HOST` (FSPI): `MOSI=GPIO11`, `CLK=GPIO12`, `MISO=-1` (write-only — this keeps
+  GPIO13 free for the pan servo).
+- **Framing:** start `4×0x00`; per LED `0xE0|brightness, B, G, R` (APA102 native BRG
+  order, 5-bit global-brightness byte); end `(N/16)+1 × 0xFF`.
+- **Emotions:** normalize case-insensitively, then map onto the canonical set from
+  `brain/schema.py`: `neutral/happy/sad/curious/angry/surprised/sleepy/thinking/excited`.
+  The server sends **uppercase** FunASR tags (`HAPPY/SAD/ANGRY/NEUTRAL/FEARFUL/DISGUSTED/
+  SURPRISED`) and **lowercase** emoji-path strings; firmware hardcodes `neutral`.
+- **Animations:** idle blink (3–6 s), listening pulse, speaking mouth (from
+  `SetChatMessage`/`SetStatus(SPEAKING)`), thinking dots, expression crossfade — a ~25 fps
+  FreeRTOS render task with a mutex around the state shared with the app loop.
+- **Brightness:** cap the 5-bit global byte to bound full-white current (legacy used
+  40/255).
+- Port the 16×16 eyes+mouth art from legacy `firmware/src/led_matrix.cpp` and expand.
+
+### Head — SG90 pan-tilt
+
+- **Hook:** `ServoController` owned by the board; it registers a `DeviceStateMachine`
+  listener (safe — `Application` is constructed before `Board::GetInstance()` in
+  `main.cc`).
+- **Transport:** LEDC (reference idiom: `main/boards/electron-bot/oscillator.cc`): 50 Hz,
+  13-bit duty, 500–2400 µs; `pan=GPIO13`, `tilt=GPIO14`.
+- **Gestures:** port the non-blocking keyframes from legacy
+  `firmware/src/servo_controller.cpp` (`WAVE/NOD/SHAKE/LOOK_LEFT/LOOK_RIGHT/TILT/DANCE`);
+  `update()` runs from the face's render task.
+- **Mapping:** device-state listener (listening→attentive, speaking→subtle motion,
+  idle→occasional look-around) + emotion→gesture (happy→nod, surprised→tilt-up,
+  angry→shake, sad→tilt-down).
 
 ## Suggested order
 

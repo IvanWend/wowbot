@@ -24,11 +24,11 @@ this file is the "where we are and what's next" summary.
 > sections of `docs/SESSION_KICKOFF.md`. Do NOT re-scaffold or re-verify work already
 > marked done — pick up at the next unchecked item.
 
----
+---a
 
 ## Current state
 
-- **Last updated:** 2026-09-23
+- **Last updated:** 2026-09-24
 - **Pivot to standalone:** DONE (decision made) — the laptop-driven design (voice loop
   + serial link) is **preserved as a legacy offline fallback**, not the active path.
 - **Phase 0 (preserve, git):** DONE — initial commit (`052ef62`) on `master`.
@@ -37,14 +37,26 @@ this file is the "where we are and what's next" summary.
   - Repo: `C:\Users\Ivan\Desktop\materials\projects\xiaozhi-esp32-server` (sibling of wowbot).
   - DeepSeek (LLM) verified live; FunASR/SenseVoice + SileroVAD + EdgeTTS all load.
   - WebSocket `ws://192.168.10.36:8000/xiaozhi/v1/`; start via `bash run-server.sh`.
-- **Next:** Phase 3 — firmware talking MVP (the go/no-go gate).
+- **Phase 3 (firmware talking MVP):** DONE — end-to-end verified.
+  - ESP-IDF **v6.1** (via EIM); custom board `wowbot-n16r8` in `main/boards/` (no-codec simplex + `NoDisplay` + `lv_init()`).
+  - Firmware repo: `C:\Users\Ivan\Desktop\materials\projects\xiaozhi-esp32` (sibling of wowbot).
+  - Board flashed over CH340 **COM7**; MAC `1c:29:04:23:c7:08`; wake word `你好小智`.
+  - Wake-word → STT → LLM → TTS all verified; only the amp decoupling cap (squeal) remains.
+- **Phase 4 / 5 (custom drivers):** DESIGN CAPTURED, not implemented — the exact hook
+  points and driver plan are in `ROADMAP.md` ("Custom driver design") and
+  `ARCHITECTURE.md`. Both drivers go in `main/boards/wowbot-n16r8/` (auto-globbed, no
+  CMake edit): a `DotStarFaceDisplay : Display` (SPI2 FSPI, full animated) and a
+  `ServoController` (LEDC, `DeviceStateMachine` listener). Build next session — **no code
+  was written this session by design.**
 
 ## Environment & tooling
 
 - OS: Windows 11 Pro. Shell: PowerShell (primary) or Git Bash (POSIX).
 - Git repo on `master` — commit early and often; don't leave work uncommitted.
-- PlatformIO CLI (`pio`) is on PATH — but that's for the **legacy** firmware only.
-  The active path is **ESP-IDF v5.x** (not yet installed) for `xiaozhi-esp32`.
+- PlatformIO CLI (`pio`) is on PATH — legacy firmware only. The active path is
+  **ESP-IDF v6.1**, installed via **EIM** (`winget install Espressif.EIM-CLI` → `eim install`).
+  Run IDF commands from **PowerShell** with `eim run "<cmd>" v6.1` (MSys/Git Bash is unsupported by IDF v6).
+- Firmware repo: `C:\Users\Ivan\Desktop\materials\projects\xiaozhi-esp32` (sibling of wowbot).
 - Repo root: `C:\Users\Ivan\Desktop\materials\projects\wowbot`
 - Server (separate clone): `C:\Users\Ivan\Desktop\materials\projects\xiaozhi-esp32-server`
   — run with `bash run-server.sh`; uses a uv-managed **Python 3.10** venv and native
@@ -66,6 +78,26 @@ this file is the "where we are and what's next" summary.
 - **Local server gotchas:** needs **Python 3.10** (3.13 fails — torch 2.2.2 has no 3.13
   wheels); run with `PYTHONUTF8=1` (Windows cp1252 console chokes on Chinese log lines);
   `opuslib_next` needs `opus.dll` + pydub needs `ffmpeg` on `PATH` (both in `tools/bin/`).
+- **Firmware gotchas:** ESP-IDF **v6.1** (not v5). The firmware finds the server via
+  **`CONFIG_OTA_URL`** (set in `main/boards/wowbot-n16r8/config.json` → `http://192.168.10.36:8003/xiaozhi/ota/`),
+  not a hardcoded WebSocket URL — that IP is baked in, so it must change if the laptop's IP changes.
+  **No-display boards must call `lv_init()`** in the board ctor (else a LoadProhibited crash when the font loads).
+- **TTS voice:** must be a **multilingual** EdgeTTS voice (`en-US-AvaMultilingualNeural`) —
+  English-only voices (`en-US-JennyNeural`) error on Chinese text; `zh-CN-XiaoxiaoNeural` speaks both but Chinese-first.
+- **Audio hardware:** MAX98357A needs a **100–470 µF decoupling cap** across VIN/GND (class-D squeal without it);
+  `SD→3.3V` (enable), `GAIN→GND`, VIN fed from the board's **5 V pin**, common ground with the board.
+- **APA102 not in `led_strip`:** the ESP-IDF `led_strip` component's `led_model_t` is only
+  `WS2812/SK6812/WS2811/WS2816` — drive the DotStar with the raw **SPI master** driver on
+  `SPI2_HOST` (`MOSI=11`, `CLK=12`, `MISO=-1`), not `led_strip_spi`.
+- **Board `.cc` files are auto-globbed:** `main/CMakeLists.txt` globs `boards/${BOARD_DIR}/*.cc`,
+  so new drivers under `main/boards/wowbot-n16r8/` compile with **no CMake edit**. (Adding
+  to `main/display/` *would* require editing the explicit `SOURCES` list.)
+- **Emotion strings are mixed-case:** server FunASR tags are **uppercase**
+  (`HAPPY/SAD/ANGRY/…`), the emoji path sends **lowercase**, firmware hardcodes `neutral`
+  — the face driver must normalize case-insensitively.
+- **Servo boot order is safe:** `main.cc` builds `Application` (state machine) *before*
+  `Board::GetInstance()`, so the board ctor can register a `DeviceStateMachine` listener.
+  LEDC servo reference: `main/boards/electron-bot/oscillator.cc` (50 Hz, 13-bit).
 
 ## Open questions
 
@@ -75,11 +107,11 @@ this file is the "where we are and what's next" summary.
 
 ## Next steps
 
-1. Phase 3 — firmware talking MVP (ESP-IDF → clone `xiaozhi-esp32` → N16R8/PSRAM →
-   point WebSocket URL at `ws://<laptop-ip>:8000/xiaozhi/v1/` → wire INMP441 + MAX98357A →
-   verify wake-word → STT → LLM → TTS end-to-end).
-2. Phase 4 / 5 — custom DotStar face + SG90 pan-tilt drivers.
-3. (later) swap TTS EdgeTTS → CosyVoice; migrate server to VPS.
+1. Add the MAX98357A decoupling cap (100–470 µF across VIN/GND) → clear the squeal → voice loop complete.
+2. Implement Phase 4 face driver `main/boards/wowbot-n16r8/dotstar_face_display.{h,cc}`
+   per the captured design (ROADMAP "Custom driver design").
+3. Implement Phase 5 servo driver `main/boards/wowbot-n16r8/servo_controller.{h,cc}`.
+4. (later) swap TTS EdgeTTS → CosyVoice; migrate server to VPS; bake a stable IP/hostname.
 
 ---
 
